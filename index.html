@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIND THE TREASURE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #0a0015;
+    --grid-bg-ground: #0d001f;
+    --grid-bg-under: #06000d;
+    --neon-pink: #ff2d78;
+    --neon-cyan: #00ffe7;
+    --neon-purple: #bf00ff;
+    --neon-yellow: #ffe600;
+    --dim: #3a1a5e;
+    --wall: #1a0035;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'VT323', monospace;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* scanlines */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.18) 2px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* grid floor */
+  .grid-floor {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 200px;
+    background:
+      linear-gradient(transparent 0%, rgba(191,0,255,0.08) 100%);
+    perspective: 400px;
+    transform-style: preserve-3d;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .grid-floor::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: -50%; right: -50%;
+    height: 100%;
+    background-image:
+      linear-gradient(var(--neon-purple) 1px, transparent 1px),
+      linear-gradient(90deg, var(--neon-purple) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.25;
+    transform: rotateX(60deg);
+    transform-origin: bottom center;
+  }
+
+  /* sun */
+  .sun {
+    position: fixed;
+    bottom: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 280px;
+    height: 140px;
+    background: linear-gradient(
+      to bottom,
+      var(--neon-yellow) 0%,
+      #ff6a00 30%,
+      var(--neon-pink) 60%,
+      var(--neon-purple) 100%
+    );
+    border-radius: 280px 280px 0 0;
+    opacity: 0.18;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* title */
+  h1 {
+    font-size: 2.8rem;
+    letter-spacing: 0.18em;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px var(--neon-cyan), 0 0 24px var(--neon-cyan);
+    margin-bottom: 0.3rem;
+    position: relative;
+    z-index: 10;
+    animation: flicker 6s infinite;
+  }
+
+  .subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--neon-pink);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+    position: relative;
+    z-index: 10;
+    text-shadow: 0 0 6px var(--neon-pink);
+  }
+
+  /* MAP CONTAINER */
+  .map-wrapper {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .floor-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    padding: 4px 10px;
+    text-transform: uppercase;
+  }
+  .floor-label.underground {
+    color: var(--neon-pink);
+    text-shadow: 0 0 6px var(--neon-pink);
+    text-align: left;
+  }
+  .floor-label.ground {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 6px var(--neon-cyan);
+    text-align: left;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1.5px solid var(--neon-purple);
+    box-shadow: 0 0 20px rgba(191,0,255,0.3), inset 0 0 30px rgba(0,0,0,0.5);
+  }
+
+  /* divider between underground and ground */
+  .ground-section {
+    border-top: 2.5px dashed var(--neon-pink);
+    position: relative;
+  }
+  .ground-section::before {
+    content: '— GROUND LEVEL —';
+    position: absolute;
+    top: -11px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.55rem;
+    background: var(--bg);
+    padding: 0 8px;
+    color: var(--neon-pink);
+    letter-spacing: 0.2em;
+    white-space: nowrap;
+  }
+
+  .cell {
+    width: 180px;
+    height: 140px;
+    border: 1px solid var(--dim);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    position: relative;
+    cursor: default;
+    transition: background 0.3s;
+  }
+
+  .cell.underground {
+    background: var(--grid-bg-under);
+  }
+  .cell.ground {
+    background: var(--grid-bg-ground);
+  }
+
+  .cell.highlight {
+    background: #1a0028;
+    border-color: var(--neon-yellow);
+    box-shadow: inset 0 0 20px rgba(255,230,0,0.07), 0 0 12px rgba(255,230,0,0.15);
+  }
+  .cell.highlight .icon {
+    animation: pulse-gold 2s infinite;
+  }
+
+  .cell.start {
+    border-color: var(--neon-cyan);
+    box-shadow: inset 0 0 20px rgba(0,255,231,0.05), 0 0 12px rgba(0,255,231,0.15);
+  }
+
+  .icon {
+    font-size: 2.2rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+
+  .cell-label {
+    font-size: 0.85rem;
+    text-align: center;
+    line-height: 1.3;
+    letter-spacing: 0.05em;
+  }
+
+  .cell.underground .cell-label { color: #cc88ff; }
+  .cell.ground .cell-label { color: #88ddcc; }
+  .cell.highlight .cell-label { color: var(--neon-yellow); text-shadow: 0 0 6px rgba(255,230,0,0.5); }
+  .cell.start .cell-label { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0,255,231,0.5); }
+
+  /* ARROW / PATH */
+  svg.path-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  /* badge on start cell */
+  .badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.5rem;
+    letter-spacing: 0.1em;
+    padding: 2px 5px;
+    border: 1px solid var(--neon-cyan);
+    color: var(--neon-cyan);
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+  .badge.you-are-here {
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+    text-shadow: 0 0 4px var(--neon-cyan);
+  }
+  .badge.treasure {
+    border-color: var(--neon-yellow);
+    color: var(--neon-yellow);
+    text-shadow: 0 0 4px var(--neon-yellow);
+  }
+
+  /* footer */
+  .footer {
+    margin-top: 1.6rem;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--neon-purple);
+    letter-spacing: 0.2em;
+    text-align: center;
+    text-shadow: 0 0 6px var(--neon-purple);
+    position: relative;
+    z-index: 10;
+    opacity: 0.8;
+  }
+
+  /* keyframes */
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.7; }
+    97% { opacity: 1; }
+    98% { opacity: 0.5; }
+    99% { opacity: 1; }
+  }
+  @keyframes pulse-gold {
+    0%, 100% { filter: drop-shadow(0 0 6px #ffe600); }
+    50% { filter: drop-shadow(0 0 18px #ffe600) drop-shadow(0 0 30px #ff9900); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .blink { animation: blink 1.1s step-start infinite; }
+</style>
+</head>
+<body>
+
+<div class="sun"></div>
+<div class="grid-floor"></div>
+
+<h1>FIND THE GIFT</h1>
+
+<div class="map-wrapper">
+  <!-- the grid itself -->
+  <div class="grid" id="mapgrid">
+
+    <!-- ROW 0: underground -->
+    <div class="cell underground">
+      <div class="icon" style="color:#cc44ff">🕷️</div>
+      <div class="cell-label">Spooky Room<br><span style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;opacity:0.6;">(mind the spider)</span></div>
+    </div>
+
+    <div class="cell underground highlight">
+      <div class="badge treasure">★ TREASURE</div>
+      <div class="icon">🎁</div>
+      <div class="cell-label"></div>
+    </div>
+
+    <!-- ROW 1: ground level, first row -->
+    <div class="cell ground">
+      <div class="icon" style="color:#88ddcc">🚪</div>
+      <div class="cell-label">Home Entry</div>
+    </div>
+
+    <div class="cell ground start">
+      <div class="badge you-are-here"><span class="blink">▶</span> YOU ARE HERE</div>
+      <div class="icon" style="color:#00ffe7">📦</div>
+      <div class="cell-label">Living Room</div>
+    </div>
+
+    <!-- ROW 2: ground level, second row -->
+    <div class="cell ground">
+      <div class="icon" style="color:#aa88ff">🚿</div>
+      <div class="cell-label">Bathroom</div>
+    </div>
+
+    <div class="cell ground">
+      <svg width="72" height="56" viewBox="0 0 72 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- bed frame -->
+        <rect x="6" y="20" width="60" height="30" rx="3" fill="#1a0035" stroke="#bf00ff" stroke-width="1.5"/>
+        <!-- headboard -->
+        <rect x="6" y="12" width="12" height="20" rx="2" fill="#2a0050" stroke="#bf00ff" stroke-width="1.5"/>
+        <!-- footboard -->
+        <rect x="54" y="16" width="12" height="16" rx="2" fill="#2a0050" stroke="#bf00ff" stroke-width="1.5"/>
+        <!-- mattress / sheets -->
+        <rect x="18" y="22" width="36" height="26" rx="2" fill="#1a4a7a" stroke="#00ffe7" stroke-width="1"/>
+        <!-- pillow -->
+        <rect x="20" y="24" width="14" height="10" rx="2" fill="#e8f4ff" stroke="#88ddcc" stroke-width="1"/>
+        <!-- blanket fold -->
+        <rect x="18" y="34" width="36" height="3" rx="1" fill="#0d3560" stroke="#00ffe7" stroke-width="0.8"/>
+        <!-- legs -->
+        <rect x="8" y="48" width="4" height="6" rx="1" fill="#bf00ff" opacity="0.7"/>
+        <rect x="60" y="48" width="4" height="6" rx="1" fill="#bf00ff" opacity="0.7"/>
+      </svg>
+      <div class="cell-label">Bedroom</div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
